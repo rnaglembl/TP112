@@ -2,13 +2,14 @@ from cmu_graphics import *
 
 def onAppStart(app):
     app.rows = app.cols = 8
-    app.boardLeft = 75
-    app.boardTop = 50
+    app.boardLeft = 100
+    app.boardTop = 100
     app.width = app.height = 800
     app.boardSize = 600
     app.cellBorderWidth = 2
     app.board = [([None] * app.cols) for row in range(app.rows)]
     app.selected = None
+    app.turn = 'white'
     initializePieces(app)
 
 def initializePieces(app):
@@ -39,6 +40,7 @@ def initializePieces(app):
 def redrawAll(app):
     drawBoard(app)
     drawBoardBorder(app)
+    drawLabel(app.turn + ' to move!', 400, 725, size = 15)
 
 def drawBoard(app):
     light = rgb(243, 225, 194)
@@ -57,10 +59,14 @@ def drawBoard(app):
                 color = light
 
 def drawBoardBorder(app):
-  # draw the board outline (with double-thickness):
   drawRect(app.boardLeft, app.boardTop, app.boardSize, app.boardSize,
            fill=None, border='black',
            borderWidth=2*app.cellBorderWidth)
+  
+def flipBoard(app):
+    app.board = app.board[::-1]
+    for rowList in app.board:
+        rowList = rowList[::-1]
 
 def drawCell(app, row, col, color, piece):
     cellLeft, cellTop = getCellLeftTop(app, row, col)
@@ -97,11 +103,20 @@ def onMousePress(app, mouseX, mouseY):
     if cell != None:
         row, col = cell
         current = app.board[row][col]
-        if app.selected == None:
-            app.selected = current
-        elif current == None or current.getColor() != app.selected.getColor():
+        if app.selected != None and app.selected.getColor() == app.turn and (
+            current == None or current.getColor() != app.selected.getColor()):
             if not app.selected.move(app.board, row, col):  
                 app.selected = current
+            else:
+                flipBoard(app)
+                if app.turn == 'white':
+                    app.turn = 'black'
+                else:
+                    app.turn = 'white'
+        else:
+            app.selected = current
+
+        print(app.turn)
 
 def isOnBoard(board, row, col):
     return 0 <= row < len(board) and 0 <= col < len(board[0])

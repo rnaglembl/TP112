@@ -209,6 +209,7 @@ class Pawn(Piece):
     def __init__(self, color, row, col):
         super().__init__(color, row, col)
         self.firstPos = row, col
+        self.lastPos = row, col
 
     def move(self, board, row, col):
         oldRow, oldCol = self.position
@@ -219,9 +220,14 @@ class Pawn(Piece):
             if row == 0 or row == 7:
                 board[row][col] = Queen(self.color, row, col)
             else:
+                #check en passant
+                if col != oldCol and board[row][col] == None:
+                    board[oldRow][col] = None
+
                 board[row][col] = self
                 self.hasMoved = True
                 self.position = (row, col)
+                self.lastPos = (oldRow, oldCol)
             return True
         else:
             return False
@@ -242,12 +248,19 @@ class Pawn(Piece):
             if isOnBoard(board, nRow, nCol) and board[nRow][nCol] != None and (
                 board[nRow][nCol].getColor() != self.color):
                 result.append((nRow, nCol))
+            #check en passant
+            if isOnBoard(board, row, nCol) and board[row][nCol] != None and (
+                board[row][nCol].getLastRow() == row + 2*dRow):
+                result.append((nRow, nCol))
 
         nRow = row+dRow*2
         if not self.hasMoved and (
             isOnBoard(board, nRow, col)) and (board[nRow][col] == None):
             result.append((nRow, col))
         return result
+    
+    def getLastRow(self):
+        return self.lastPos[0]
 
     def draw(self, x, y, cellSize):
         drawCircle(x, y, cellSize/4, fill = self.color)
@@ -341,11 +354,10 @@ class King(Piece):
                     board[nRow][nCol].getColor() != self.color):
                     result.append((nRow, nCol))
 
+        #check castle
         if not self.hasMoved:
             rightRook = board[row][7]
             leftRook = board[row][0]
-
-            print(rightRook)
             
             if (len(self.getLegalMovesInDirection(board, 0, 1)) == 2 and
                 rightRook != None and not rightRook.hasMoved):

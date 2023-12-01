@@ -10,53 +10,53 @@ def onAppStart(app):
     app.board = [([None] * app.cols) for row in range(app.rows)]
     app.selected = None
     app.turn = 'white'
+    app.inCheck = False
+    app.inCheckmate = False
     initializePieces(app)
 
 def initializePieces(app):
     for col in range(app.cols):
-        app.board[6][col] = Pawn('white', app.board)
-        app.board[1][col] = Pawn('black', app.board)
-    app.board[0][0] = Rook('black', app.board)
-    app.board[0][7] = Rook('black', app.board)
-    app.board[7][0] = Rook('white', app.board)
-    app.board[7][7] = Rook('white', app.board)
+        app.board[6][col] = Pawn('white', 6, col)
+        app.board[1][col] = Pawn('black', 1, col)
+    app.board[0][0] = Rook('black', 0, 0)
+    app.board[0][7] = Rook('black', 0, 7)
+    app.board[7][0] = Rook('white', 7, 0)
+    app.board[7][7] = Rook('white', 7, 7)
 
-    app.board[0][1] = Knight('black', app.board)
-    app.board[0][6] = Knight('black', app.board)
-    app.board[7][1] = Knight('white', app.board)
-    app.board[7][6] = Knight('white', app.board)
+    app.board[0][1] = Knight('black', 0, 1)
+    app.board[0][6] = Knight('black', 0, 6)
+    app.board[7][1] = Knight('white', 7, 1)
+    app.board[7][6] = Knight('white', 7, 6)
 
-    app.board[0][2] = Bishop('black', app.board)
-    app.board[0][5] = Bishop('black', app.board)
-    app.board[7][2] = Bishop('white', app.board)
-    app.board[7][5] = Bishop('white', app.board)
+    app.board[0][2] = Bishop('black', 0, 2)
+    app.board[0][5] = Bishop('black', 0, 5)
+    app.board[7][2] = Bishop('white', 7, 2)
+    app.board[7][5] = Bishop('white', 7, 5)
 
-    app.board[0][3] = Queen('black', app.board)
-    app.board[7][3] = Queen('white', app.board)
+    app.board[0][3] = Queen('black', 0, 3)
+    app.board[7][3] = Queen('white', 7, 3)
 
-    app.board[0][4] = King('black', app.board)
-    app.board[7][4] = King('white', app.board)
+    app.board[0][4] = King('black', 0, 4)
+    app.board[7][4] = King('white', 7, 4)
 
 def redrawAll(app):
     drawBoard(app)
     drawBoardBorder(app)
     drawLabel(app.turn + ' to move!', 400, 725, size = 15)
+    if app.inCheckmate:
+        drawLabel(app.turn + ' lost!', 400, 750, size = 15)
+    elif app.inCheck:
+        drawLabel(app.turn + ' is in check!', 400, 750, size = 15)
 
 def drawBoard(app):
     light = rgb(243, 225, 194)
     dark = rgb(194, 159, 130)
     color = dark
     for row in range(app.rows):
-        if color == light:
-            color = dark
-        else:
-            color = light
+        color = dark if color == light else light
         for col in range(app.cols):
             drawCell(app, row, col, color, app.board[row][col])
-            if color == light:
-                color = dark
-            else:
-                color = light
+            color = dark if color == light else light
 
 def drawBoardBorder(app):
   drawRect(app.boardLeft, app.boardTop, app.boardSize, app.boardSize,
@@ -108,44 +108,118 @@ def onMousePress(app, mouseX, mouseY):
             if not app.selected.move(app.board, row, col):  
                 app.selected = current
             else:
-                flipBoard(app)
-                if app.turn == 'white':
-                    app.turn = 'black'
-                else:
-                    app.turn = 'white'
+                #flipBoard(app)
+                app.turn = 'black' if app.turn == 'white' else 'white'
         else:
             app.selected = current
 
-        print(app.turn)
+        king = getKing(app.turn, app.board)
+
+        if king.isChecked(app.board):
+            app.inCheck = True
+            if king.isCheckmated(app.board):
+                app.inCheckmate = True
+        else:
+            app.inCheck = False
+
+def getKing(color, board):
+    rows, cols = len(board), len(board[0])
+    for row in range(rows):
+        for col in range(cols):
+            if isinstance(board[row][col], King) and (
+                board[row][col].getColor() == color):
+                return board[row][col]
 
 def isOnBoard(board, row, col):
     return 0 <= row < len(board) and 0 <= col < len(board[0])
-        
-class Pawn:
-    def __init__(self, color, board):
+
+def getAllLegalMoves(color, board):
+    result = []
+    rows, cols = len(board), len(board[0])
+    for row in range(rows):
+        for col in range(cols):
+            current = board[row][col]
+            if current != None and current.getColor() == color:
+                result += current.getLegalMoves(board)
+    return result
+
+def hasAKingLegalMove(color, board):
+    result = []
+    rows, cols = len(board), len(board[0])
+    for row in range(rows):
+        for col in range(cols):
+            current = board[row][col]
+            if current != None and current.getColor() == color:
+                for nRow, nCol in current.getLegalMoves(board):
+                    if current.isKingLegalMove(board, nRow, nCol):
+                        return True
+
+class Piece:
+    def __init__(self, color, row, col):
         self.color = color
-        self.firstPos = None
-        self.currentPos = None
+        self.hasMoved = False
+        self.position = row, col
 
     def move(self, board, row, col):
-        if self.firstPos == None:
-            self.firstPos = self.getPosition(board)
-        if self.currentPos == None:
-            self.currentPos = self.firstPos
+        oldRow, oldCol = self.position
 
-        oldRow, oldCol = self.currentPos
-
-        if (row, col) in self.getLegalMoves(board):
+        if ((row, col) in self.getLegalMoves(board) and 
+            self.isKingLegalMove(board, row, col)):
             board[oldRow][oldCol] = None
             board[row][col] = self
-            self.currentPos = (row, col)
+            self.hasMoved = True
+            self.position = (row, col)
             return True
         else:
             return False
+    
+    def getLegalMovesInDirection(self, board, dRow, dCol):
+        row, col = self.position
+        nRow, nCol = row+dRow, col+dCol
+        result = []
+        while isOnBoard(board, nRow, nCol) and board[nRow][nCol] == None:
+            result.append((nRow, nCol))
+            nRow+=dRow
+            nCol+=dCol
+
+        if isOnBoard(board, nRow, nCol) and board[nRow][nCol] != None and (
+            board[nRow][nCol].getColor() != self.color):
+            result.append((nRow, nCol))
+        return result
+    
+    def isKingLegalMove(self, board, nRow, nCol):
+        row, col = self.position
+        target = board[nRow][nCol]
+        board[row][col] = None
+        board[nRow][nCol] = self
+        self.position = nRow, nCol
+
+        result = not getKing(self.color, board).isChecked(board)
+        board[row][col] = self
+        board[nRow][nCol] = target
+        self.position = row, col
+
+        return result
+    
+    def getPosition(self, board):
+        rows, cols = len(board), len(board[0])
+        for row in range(rows):
+            for col in range(cols):
+                if board[row][col] == self:
+                    return row, col
         
+    def getColor(self):
+        return self.color
+
+class Pawn(Piece):
+    def __init__(self, color, row, col):
+        super().__init__(color, row, col)
+        self.firstPos = row, col
+
     def getLegalMoves(self, board):
         rows = cols = len(board)
-        row, col = self.currentPos
+        row, col = self.position
+    
         centerRow = 5
         dRow = -1 if self.firstPos[0] - centerRow > 0 else 1
         result = []
@@ -160,211 +234,73 @@ class Pawn:
                 result.append((nRow, nCol))
 
         nRow = row+dRow*2
-        if self.firstPos == self.currentPos and (
+        if not self.hasMoved and (
             isOnBoard(board, nRow, col)) and (board[nRow][col] == None):
             result.append((nRow, col))
         return result
-    
-    def getPosition(self, board):
-        rows, cols = len(board), len(board[0])
-        for row in range(rows):
-            for col in range(cols):
-                if board[row][col] == self:
-                    return row, col
-        
-    def getColor(self):
-        return self.color
 
     def draw(self, x, y, cellSize):
         drawCircle(x, y, cellSize/4, fill = self.color)
 
-class Rook:
-    def __init__(self, color, board):
-        self.color = color
-        self.currentPos = None
-
-    def move(self, board, row, col):
-        if self.currentPos == None:
-            self.currentPos = self.getPosition(board)
-        oldRow, oldCol = self.currentPos
-
-        if (row, col) in self.getLegalMoves(board):
-            board[oldRow][oldCol] = None
-            board[row][col] = self
-            self.currentPos = (row, col)
-            return True
-        else:
-            return False
+class Rook(Piece):
+    def __init__(self, color, row, col):
+        super().__init__(color, row, col)
         
     def getLegalMoves(self, board):
         rows = cols = len(board)
-        row, col = self.currentPos
+        row, col = self.position
         result = []
         for dRow, dCol in [[0,1], [1,0], [0,-1], [-1,0]]:
                 result += self.getLegalMovesInDirection(board, dRow, dCol)
         return result
-    
-    def getLegalMovesInDirection(self, board, dRow, dCol):
-        row, col = self.currentPos
-        nRow, nCol = row+dRow, col+dCol
-        result = []
-        while isOnBoard(board, nRow, nCol) and board[nRow][nCol] == None:
-            result.append((nRow, nCol))
-            nRow+=dRow
-            nCol+=dCol
-
-        if isOnBoard(board, nRow, nCol) and board[nRow][nCol] != None and (
-            board[nRow][nCol].getColor() != self.color):
-            result.append((nRow, nCol))
-        return result
-
-    def getColor(self):
-        return self.color
-    
-    def getPosition(self, board):
-        rows, cols = len(board), len(board[0])
-        for row in range(rows):
-            for col in range(cols):
-                if board[row][col] == self:
-                    return row, col
 
     def draw(self, x, y, cellSize):
         drawRect(x, y, cellSize/2, cellSize/2, fill=self.color, align='center')
 
-class Bishop:
-    def __init__(self, color, board):
-        self.color = color
-        self.currentPos = None
-
-    def move(self, board, row, col):
-        if self.currentPos == None:
-            self.currentPos = self.getPosition(board)
-        oldRow, oldCol = self.currentPos
-
-        if (row, col) in self.getLegalMoves(board):
-            board[oldRow][oldCol] = None
-            board[row][col] = self
-            self.currentPos = (row, col)
-            return True
-        else:
-            return False
+class Bishop(Piece):
+    def __init__(self, color, row, col):
+        super().__init__(color, row, col)
         
     def getLegalMoves(self, board):
         rows = cols = len(board)
-        row, col = self.currentPos
+        row, col = self.position
         result = []
 
         for dRow in [-1, 1]:
             for dCol in [-1, 1]:
                 result += self.getLegalMovesInDirection(board, dRow, dCol)
         return result
-    
-    def getLegalMovesInDirection(self, board, dRow, dCol):
-        row, col = self.currentPos
-        nRow, nCol = row+dRow, col+dCol
-        result = []
-        while isOnBoard(board, nRow, nCol) and board[nRow][nCol] == None:
-            result.append((nRow, nCol))
-            nRow+=dRow
-            nCol+=dCol
-
-        if isOnBoard(board, nRow, nCol) and board[nRow][nCol] != None and (
-            board[nRow][nCol].getColor() != self.color):
-            result.append((nRow, nCol))
-        return result
-
-    def getColor(self):
-        return self.color
-    
-    def getPosition(self, board):
-        rows, cols = len(board), len(board[0])
-        for row in range(rows):
-            for col in range(cols):
-                if board[row][col] == self:
-                    return row, col
 
     def draw(self, x, y, cellSize):
         drawCircle(x, y, cellSize/4, fill = self.color)
         drawCircle(x, y, cellSize/8, fill = self.color, border = 'brown')
 
-class Queen:
-    def __init__(self, color, board):
-        self.color = color
-        self.currentPos = None
+class Queen(Piece):
+    def __init__(self, color, row, col):
+        super().__init__(color, row, col)
 
-    def move(self, board, row, col):
-        if self.currentPos == None:
-            self.currentPos = self.getPosition(board)
-        oldRow, oldCol = self.currentPos
-
-        if (row, col) in self.getLegalMoves(board):
-            board[oldRow][oldCol] = None
-            board[row][col] = self
-            self.currentPos = (row, col)
-            return True
-        else:
-            return False
-        
     def getLegalMoves(self, board):
         rows = cols = len(board)
-        row, col = self.currentPos
+        row, col = self.position
         result = []
         for dRow in [-1, 0, 1]:
             for dCol in [-1, 0, 1]:
                 if not dRow == dCol == 0:
                     result += self.getLegalMovesInDirection(board, dRow, dCol)
         return result
-    
-    def getLegalMovesInDirection(self, board, dRow, dCol):
-        row, col = self.currentPos
-        nRow, nCol = row+dRow, col+dCol
-        result = []
-        while isOnBoard(board, nRow, nCol) and board[nRow][nCol] == None:
-            result.append((nRow, nCol))
-            nRow+=dRow
-            nCol+=dCol
-
-        if isOnBoard(board, nRow, nCol) and board[nRow][nCol] != None and (
-            board[nRow][nCol].getColor() != self.color):
-            result.append((nRow, nCol))
-        return result
-
-    def getColor(self):
-        return self.color
-    
-    def getPosition(self, board):
-        rows, cols = len(board), len(board[0])
-        for row in range(rows):
-            for col in range(cols):
-                if board[row][col] == self:
-                    return row, col
 
     def draw(self, x, y, cellSize):
         drawCircle(x, y, cellSize/4, fill = self.color)
         drawCircle(x, y, cellSize/6, fill = self.color, border = 'brown')
         drawCircle(x, y, cellSize/8, fill = self.color, border = 'brown')
 
-class Knight:
-    def __init__(self, color, board):
-        self.color = color
-        self.currentPos = None
+class Knight(Piece):
+    def __init__(self, color, row, col):
+        super().__init__(color, row, col)
 
-    def move(self, board, row, col):
-        if self.currentPos == None:
-            self.currentPos = self.getPosition(board)
-        oldRow, oldCol = self.currentPos
-
-        if (row, col) in self.getLegalMoves(board):
-            board[oldRow][oldCol] = None
-            board[row][col] = self
-            self.currentPos = (row, col)
-            return True
-        else:
-            return False
-        
     def getLegalMoves(self, board):
         rows = cols = len(board)
-        row, col = self.currentPos
+        row, col = self.position
         result = []
         possibleMoves = [[2,-1], [2,1], [-2,-1], [-2,1], 
                          [-1,2], [1,2], [-1,-2], [1,-2]]
@@ -375,40 +311,16 @@ class Knight:
                 result.append((nRow, nCol))
         return result
 
-    def getColor(self):
-        return self.color
-    
-    def getPosition(self, board):
-        rows, cols = len(board), len(board[0])
-        for row in range(rows):
-            for col in range(cols):
-                if board[row][col] == self:
-                    return row, col
-
     def draw(self, x, y, cellSize):
         drawRect(x, y, cellSize/3, cellSize/1.5, fill=self.color, align='center')
 
-class King:
-    def __init__(self, color, board):
-        self.color = color
-        self.currentPos = None
-
-    def move(self, board, row, col):
-        if self.currentPos == None:
-            self.currentPos = self.getPosition(board)
-        oldRow, oldCol = self.currentPos
-
-        if (row, col) in self.getLegalMoves(board):
-            board[oldRow][oldCol] = None
-            board[row][col] = self
-            self.currentPos = (row, col)
-            return True
-        else:
-            return False
+class King(Piece):
+    def __init__(self, color, row, col):
+        super().__init__(color, row, col)
         
     def getLegalMoves(self, board):
         rows = cols = len(board)
-        row, col = self.currentPos
+        row, col = self.position
         result = []
         for dRow in [-1, 0, 1]:
             for dCol in [-1, 0, 1]:
@@ -419,17 +331,15 @@ class King:
                     board[nRow][nCol].getColor() != self.color):
                     result.append((nRow, nCol))
         return result
-
-    def getColor(self):
-        return self.color
+                
+    def isChecked(self, board):
+        oppColor = 'white' if self.color == 'black' else 'black'
+        return self.position in getAllLegalMoves(oppColor, board)
     
-    def getPosition(self, board):
-        rows, cols = len(board), len(board[0])
-        for row in range(rows):
-            for col in range(cols):
-                if board[row][col] == self:
-                    return row, col
-
+    def isCheckmated(self, board):
+        if self.isChecked(board) and not hasAKingLegalMove(self.color, board):
+            return True
+            
     def draw(self, x, y, cellSize):
         drawCircle(x, y, cellSize/4, fill = self.color)
         drawLine(x-cellSize/4, y, x+cellSize/4, y, fill = 'brown')

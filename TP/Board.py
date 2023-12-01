@@ -249,7 +249,8 @@ class Pawn(Piece):
                 board[nRow][nCol].getColor() != self.color):
                 result.append((nRow, nCol))
             #check en passant
-            if isOnBoard(board, row, nCol) and board[row][nCol] != None and (
+            if isOnBoard(board, row, nCol) and (
+                isinstance(board[row][nCol], Pawn) and 
                 board[row][nCol].getLastRow() == row + 2*dRow):
                 result.append((nRow, nCol))
 

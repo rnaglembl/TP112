@@ -351,8 +351,8 @@ class King(Piece):
                 if dRow == dCol == 0:
                     continue
                 nRow, nCol = row+dRow, col+dCol
-                if isOnBoard(board, nRow, nCol) and (board[nRow][nCol] == None or
-                    board[nRow][nCol].getColor() != self.color):
+                if isOnBoard(board, nRow, nCol) and (board[nRow][nCol] == None 
+                    or board[nRow][nCol].getColor() != self.color):
                     result.append((nRow, nCol))
 
         #check castle
@@ -375,17 +375,24 @@ class King(Piece):
         if ((row, col) in self.getLegalMoves(board) and 
             self.isKingLegalMove(board, row, col)):
             if abs(col-oldCol) > 1:
-                self.castleRook(board, row, col)
-            board[oldRow][oldCol] = None
-            board[row][col] = self
-            self.hasMoved = True
-            self.position = (row, col)
-            return True
+                if not self.isChecked(board):
+                    self.castle(board, row, col)
+                    return True
+            else:
+                board[oldRow][oldCol] = None
+                board[row][col] = self
+                self.position = (row, col)   
+                self.hasMoved = True
+                return True
         else:
             return False
         
-    def castleRook(self, board, row, col):
+    def castle(self, board, row, col):
         oldRow, oldCol = self.position
+        board[oldRow][oldCol] = None
+        board[row][col] = self
+        self.position = (row, col)
+        
         if col - oldCol > 0:
             board[row][7] = None
             board[row][5] = Rook(self.color, row, 5)

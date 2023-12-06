@@ -62,6 +62,7 @@ def redrawAll(app):
 
     cx = app.width/2
     boardBottom = app.boardTop+app.boardSize
+    
     if app.inCheckmate:
         oppColor = getOppColor(app.turn)
         drawLabel(oppColor + ' has won by checkmate!', cx, boardBottom+10, 
@@ -77,8 +78,7 @@ def redrawAll(app):
              border = 'black', align = 'center')
     drawLabel('reset game', cx, app.resetY, size = 15)
 
-    drawLabel(app.whitePointDiff, app.boardLeft+5, 
-              app.boardTop+app.boardSize+10, size = 15)
+    drawLabel(app.whitePointDiff, app.boardLeft+5, boardBottom+10, size = 15)
     drawLabel(app.blackPointDiff, app.boardLeft+5, app.boardTop-10, size = 15)
 
 def drawBoard(app):
@@ -160,8 +160,8 @@ def updatePointDiff(app):
         app.whitePointDiff = f'+{diff}'
         app.blackPointDiff = f'-{diff}'
     elif diff < 0:
-        app.whitePointDiff = f'-{diff}'
-        app.blackPointDiff = f'+{diff}'
+        app.whitePointDiff = f'{diff}'
+        app.blackPointDiff = f'+{-diff}'
     else:
         app.whitePointDiff = app.blackPointDiff = '0'
 
@@ -172,18 +172,16 @@ def onMousePress(app, mouseX, mouseY):
         row, col = cell
         current = app.board[row][col]
 
-        if app.selected != None and app.selected.getColor() == app.turn and (
-            current == None or current.getColor() != app.selected.getColor()):
-            if not app.selected.move(app.board, row, col):  
-                app.selected = current
-            else:
+        if current != None and current.getColor() == app.turn:
+            app.selected = current
+        elif app.selected != None:
+            if app.selected.move(app.board, row, col): 
                 app.turn = getOppColor(app.turn)
                 app.selected = None
-                updatePointDiff(app)
+                updatePointDiff(app) 
+            else:
+                app.selected = None
         else:
-            app.selected = current
-
-        if app.selected != None and app.selected.getColor() != app.turn:
             app.selected = None
 
         king = getKing(app.turn, app.board)
@@ -302,7 +300,6 @@ class Piece:
         scaleFactor = stockWidth/stockHeight
         h = cellSize//1.5
         w = h * scaleFactor
-
         icon = CMUImage(self.icon)
         drawImage(icon, x, y, align = 'center', width = w, height = h)
 
@@ -319,6 +316,7 @@ class Pawn(Piece):
         if ((row, col) in self.getLegalMoves(board) and 
             self.isKingLegalMove(board, row, col)):
             board[oldRow][oldCol] = None
+            #pawn promotion
             if row == 0 or row == 7:
                 board[row][col] = Queen(self.color, row, col)
             else:
@@ -346,6 +344,7 @@ class Pawn(Piece):
             result.append((nRow, col))
 
         for nCol in [col-1, col+1]:
+            #check diagonal
             if isOnBoard(board, nRow, nCol) and board[nRow][nCol] != None and (
                 board[nRow][nCol].getColor() != self.color):
                 result.append((nRow, nCol))
@@ -355,6 +354,7 @@ class Pawn(Piece):
                 board[row][nCol].getLastRow() == row + 2*dRow):
                 result.append((nRow, nCol))
 
+        #check first move
         nRow = row+dRow*2
         if not self.hasMoved and (
             isOnBoard(board, nRow, col)) and (board[nRow][col] == None):
@@ -373,6 +373,7 @@ class Rook(Piece):
         rows = cols = len(board)
         row, col = self.position
         result = []
+        #check vertical/horizontal squares
         for dRow, dCol in [[0,1], [1,0], [0,-1], [-1,0]]:
                 result += self.getLegalMovesInDirection(board, dRow, dCol)
         return result
@@ -387,6 +388,7 @@ class Bishop(Piece):
         row, col = self.position
         result = []
 
+        #check diagonals
         for dRow in [-1, 1]:
             for dCol in [-1, 1]:
                 result += self.getLegalMovesInDirection(board, dRow, dCol)
@@ -462,6 +464,7 @@ class King(Piece):
 
         if ((row, col) in self.getLegalMoves(board) and 
             self.isKingLegalMove(board, row, col)):
+            #check castle
             if abs(col-oldCol) > 1:
                 if not self.isChecked(board):
                     self.castle(board, row, col)

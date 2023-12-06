@@ -10,27 +10,50 @@ from PIL import Image
 
 def onAppStart(app):
     app.rows = app.cols = 8
-    app.boardLeft = 100
-    app.boardTop = 100
+    app.boardLeft = app.boardTop = 100
     app.width = app.height = 800
     app.boardSize = 600
     app.cellBorderWidth = 2
+    app.resetWidth = 85
+    app.resetHeight = 25
+    app.resetY = 775
+    resetBoard(app)
+
+def resetBoard(app):
     app.board = [([None] * app.cols) for row in range(app.rows)]
     app.selected = None
     app.turn = 'white'
     app.inCheck = False
     app.inCheckmate = False
     app.inStalemate = False
+    app.whitePoints = 0
+    app.blackPoints = 0
     initializePieces(app)
 
 def initializePieces(app):
+    for col in range(app.cols):
+        app.board[6][col] = Pawn('white', 6, col)
+        app.board[1][col] = Pawn('black', 1, col)
 
     app.board[0][0] = Rook('black', 0, 0)
     app.board[0][7] = Rook('black', 0, 7)
+    app.board[7][0] = Rook('white', 7, 0)
+    app.board[7][7] = Rook('white', 7, 7)
+
+    app.board[0][1] = Knight('black', 0, 1)
+    app.board[0][6] = Knight('black', 0, 6)
+    app.board[7][1] = Knight('white', 7, 1)
+    app.board[7][6] = Knight('white', 7, 6)
+
+    app.board[0][2] = Bishop('black', 0, 2)
+    app.board[0][5] = Bishop('black', 0, 5)
+    app.board[7][2] = Bishop('white', 7, 2)
+    app.board[7][5] = Bishop('white', 7, 5)
 
     app.board[0][3] = Queen('black', 0, 3)
+    app.board[7][3] = Queen('white', 7, 3)
 
-    app.board[4][7] = King('black', 4, 7)
+    app.board[0][4] = King('black', 0, 4)
     app.board[7][4] = King('white', 7, 4)
 
 def redrawAll(app):
@@ -47,16 +70,32 @@ def redrawAll(app):
         drawLabel(app.turn + ' to move!', cx, 725, size = 15)
         if app.inCheck:
             drawLabel(app.turn + ' is in check!', cx, 750, size = 15)
+    
+    drawRect(cx, app.resetY, app.resetWidth, app.resetHeight, fill = None, 
+             border = 'black', align = 'center')
+    drawLabel('reset game', cx, app.resetY, size = 15)
+    
 
 def drawBoard(app):
     light = rgb(243, 225, 194)
     dark = rgb(194, 159, 130)
     color = dark
+    possibleMoves = []
+
+    if app.selected != None:
+        possibleMoves = app.selected.getKingLegalMoves(app.board)
+
     for row in range(app.rows):
         color = dark if color == light else light
         for col in range(app.cols):
             drawCell(app, row, col, color, app.board[row][col])
             color = dark if color == light else light
+
+            if (row, col) in possibleMoves:
+                x,y = getCellLeftTop(app, row, col) 
+                cellSize = getCellSize(app)
+                drawCircle(x+cellSize/2,y+cellSize/2, 10, fill = 'grey', 
+                           opacity = 50)
 
 def getOppColor(color):
     return 'white' if color == 'black' else 'black'
@@ -75,6 +114,10 @@ def drawCell(app, row, col, color, piece):
     if piece != None:
         piece.draw(cellLeft+cellSize/2, cellTop+cellSize/2, cellSize)
 
+        if piece == app.selected:
+            drawRect(cellLeft, cellTop, cellSize, cellSize,
+             fill= 'yellow', opacity = 15)
+            
 def getCellLeftTop(app, row, col):
     cellSize = getCellSize(app)
     cellLeft = app.boardLeft + col * cellSize
@@ -101,14 +144,19 @@ def onMousePress(app, mouseX, mouseY):
     if cell != None:
         row, col = cell
         current = app.board[row][col]
+
         if app.selected != None and app.selected.getColor() == app.turn and (
             current == None or current.getColor() != app.selected.getColor()):
             if not app.selected.move(app.board, row, col):  
                 app.selected = current
             else:
                 app.turn = getOppColor(app.turn)
+                app.selected = None
         else:
             app.selected = current
+
+        if app.selected != None and app.selected.getColor() != app.turn:
+            app.selected = None
 
         king = getKing(app.turn, app.board)
 
@@ -120,6 +168,12 @@ def onMousePress(app, mouseX, mouseY):
             app.inStalemate = True
         else:
             app.inCheck = False
+    else:
+        leftX = app.width/2 - app.resetWidth/2
+        topY = app.resetY - app.resetHeight/2
+        if (leftX < mouseX < leftX + app.resetWidth and 
+            topY < mouseY < topY + app.resetHeight):
+            resetBoard(app)
 
 def getKing(color, board):
     rows, cols = len(board), len(board[0])
@@ -148,10 +202,9 @@ def hasAKingLegalMove(color, board):
     for row in range(rows):
         for col in range(cols):
             current = board[row][col]
-            if current != None and current.getColor() == color:
-                for nRow, nCol in current.getLegalMoves(board):
-                    if current.isKingLegalMove(board, nRow, nCol):
-                        return True
+            if current != None and current.getColor() == color and (
+                current.getKingLegalMoves(board) != []):
+                return True
     return False
 
 class Piece:
@@ -202,6 +255,13 @@ class Piece:
         self.position = row, col
 
         return result
+    
+    def getKingLegalMoves(self, board):
+        result = []
+        for row, col in self.getLegalMoves(board):
+            if self.isKingLegalMove(board, row, col):
+                result.append((row, col))
+        return result
         
     def getColor(self):
         return self.color
@@ -216,7 +276,6 @@ class Piece:
         w = h * scaleFactor
 
         icon = CMUImage(self.icon)
-        
         drawImage(icon, x, y, align = 'center', width = w, height = h)
 
 class Pawn(Piece):

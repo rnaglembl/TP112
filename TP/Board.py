@@ -16,7 +16,7 @@ def onAppStart(app):
     app.cellBorderWidth = 2
     app.resetWidth = 85
     app.resetHeight = 25
-    app.resetY = 775
+    app.resetY = 760
     resetBoard(app)
 
 def resetBoard(app):
@@ -26,8 +26,8 @@ def resetBoard(app):
     app.inCheck = False
     app.inCheckmate = False
     app.inStalemate = False
-    app.whitePoints = 0
-    app.blackPoints = 0
+    app.whitePointDiff = '0'
+    app.blackPointDiff = '0'
     initializePieces(app)
 
 def initializePieces(app):
@@ -61,20 +61,25 @@ def redrawAll(app):
     drawBoardBorder(app)
 
     cx = app.width/2
+    boardBottom = app.boardTop+app.boardSize
     if app.inCheckmate:
         oppColor = getOppColor(app.turn)
-        drawLabel(oppColor + ' has won by checkmate!', cx, 725, size = 15)
+        drawLabel(oppColor + ' has won by checkmate!', cx, boardBottom+10, 
+                  size = 15)
     elif app.inStalemate:
-        drawLabel('Draw!', cx, 725, size = 15)
+        drawLabel('Draw!', cx, boardBottom+10, size = 15)
     else:
-        drawLabel(app.turn + ' to move!', cx, 725, size = 15)
+        drawLabel(app.turn + ' to move!', cx, boardBottom+10, size = 15)
         if app.inCheck:
-            drawLabel(app.turn + ' is in check!', cx, 750, size = 15)
+            drawLabel(app.turn + ' is in check!', cx, boardBottom+30, size = 15)
     
     drawRect(cx, app.resetY, app.resetWidth, app.resetHeight, fill = None, 
              border = 'black', align = 'center')
     drawLabel('reset game', cx, app.resetY, size = 15)
-    
+
+    drawLabel(app.whitePointDiff, app.boardLeft+5, 
+              app.boardTop+app.boardSize+10, size = 15)
+    drawLabel(app.blackPointDiff, app.boardLeft+5, app.boardTop-10, size = 15)
 
 def drawBoard(app):
     light = rgb(243, 225, 194)
@@ -137,6 +142,28 @@ def getCell(app, x, y):
         return row, col
     else:
         return None
+    
+def updatePointDiff(app):
+    whitePoints = blackPoints = 0
+    rows, cols = len(app.board), len(app.board[0])
+    for row in range(rows):
+        for col in range(cols):
+            current = app.board[row][col]
+            if current != None:
+                if current.getColor() == 'white':
+                    whitePoints += current.getValue()
+                else:
+                    blackPoints += current.getValue()
+
+    diff = whitePoints - blackPoints
+    if diff > 0:
+        app.whitePointDiff = f'+{diff}'
+        app.blackPointDiff = f'-{diff}'
+    elif diff < 0:
+        app.whitePointDiff = f'-{diff}'
+        app.blackPointDiff = f'+{diff}'
+    else:
+        app.whitePointDiff = app.blackPointDiff = '0'
 
 def onMousePress(app, mouseX, mouseY):
     cell = getCell(app, mouseX, mouseY)
@@ -152,6 +179,7 @@ def onMousePress(app, mouseX, mouseY):
             else:
                 app.turn = getOppColor(app.turn)
                 app.selected = None
+                updatePointDiff(app)
         else:
             app.selected = current
 
@@ -309,7 +337,6 @@ class Pawn(Piece):
     def getLegalMoves(self, board):
         rows = cols = len(board)
         row, col = self.position
-    
         centerRow = 5
         dRow = -1 if self.firstPos[0] - centerRow > 0 else 1
         result = []
@@ -402,7 +429,6 @@ class King(Piece):
     def __init__(self, color, row, col):
         icon = Image.open('images/'+ color + 'King.png')
         super().__init__(color, row, col, 0, icon)
-        
         
     def getLegalMoves(self, board):
         rows = cols = len(board)
